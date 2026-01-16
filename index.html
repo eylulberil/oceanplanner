@@ -36,7 +36,6 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // sendPasswordResetEmail eklendi
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -63,21 +62,17 @@
             return <span ref={ref} style={{ display: 'inline-flex' }}></span>;
         };
 
-        // --- Giriş / Kayıt / Şifre Sıfırlama Ekranı ---
+        // --- GİRİŞ EKRANI (LOGOLU) ---
         const LoginScreen = ({ onLogin, onSignup, onResetPassword, loading, error, successMsg }) => {
-            const [mode, setMode] = useState('login'); // 'login', 'signup', 'reset'
+            const [mode, setMode] = useState('login');
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                if (mode === 'signup') {
-                    onSignup(email, password);
-                } else if (mode === 'login') {
-                    onLogin(email, password);
-                } else if (mode === 'reset') {
-                    onResetPassword(email);
-                }
+                if (mode === 'signup') onSignup(email, password);
+                else if (mode === 'login') onLogin(email, password);
+                else if (mode === 'reset') onResetPassword(email);
             };
 
             const getTitle = () => {
@@ -101,9 +96,24 @@
                     </div>
 
                     <div className="z-10 flex flex-col items-center text-center max-w-sm w-full animate-fadeIn">
-                        <div className="bg-white/10 backdrop-blur-lg p-4 rounded-3xl mb-6 animate-float shadow-2xl border border-white/10">
-                            <Icon name="waves" size={48} className="text-cyan-300" />
+                        
+                        {/* --- LOGO BÖLÜMÜ (GİRİŞ EKRANI) --- */}
+                        <div className="bg-white/10 backdrop-blur-lg p-6 rounded-3xl mb-6 animate-float shadow-2xl border border-white/10">
+                            {/* Eğer logo.png yoksa yedek ikon görünür */}
+                            <img 
+                                src="logo.png" 
+                                alt="Logo" 
+                                className="w-24 h-24 object-contain"
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'block';
+                                }}
+                            />
+                            <div style={{display:'none'}}>
+                                <Icon name="waves" size={64} className="text-cyan-300" />
+                            </div>
                         </div>
+                        {/* ---------------------------------- */}
                         
                         <h1 className="text-3xl font-bold mb-2 tracking-tight">OceanPlanner</h1>
                         <p className="text-blue-200 mb-8 text-sm">Hayatını planla, akışına bırak.</p>
@@ -111,82 +121,43 @@
                         <form onSubmit={handleSubmit} className="w-full space-y-4 bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
                             <h2 className="text-lg font-semibold mb-2">{getTitle()}</h2>
                             
-                            {error && (
-                                <div className="bg-red-500/20 border border-red-500/50 text-red-100 text-xs p-3 rounded-lg text-left">
-                                    {error}
-                                </div>
-                            )}
-
-                            {successMsg && (
-                                <div className="bg-green-500/20 border border-green-500/50 text-green-100 text-xs p-3 rounded-lg text-left">
-                                    {successMsg}
-                                </div>
-                            )}
+                            {error && <div className="bg-red-500/20 border border-red-500/50 text-red-100 text-xs p-3 rounded-lg text-left">{error}</div>}
+                            {successMsg && <div className="bg-green-500/20 border border-green-500/50 text-green-100 text-xs p-3 rounded-lg text-left">{successMsg}</div>}
 
                             <div className="space-y-3">
                                 <div className="relative">
                                     <div className="absolute left-3 top-3 text-blue-200/50"><Icon name="mail" size={18} /></div>
-                                    <input 
-                                        type="email" 
-                                        required
-                                        placeholder="E-posta" 
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all"
-                                    />
+                                    <input type="email" required placeholder="E-posta" value={email} onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all" />
                                 </div>
-                                
                                 {mode !== 'reset' && (
                                     <div className="relative">
                                         <div className="absolute left-3 top-3 text-blue-200/50"><Icon name="lock" size={18} /></div>
-                                        <input 
-                                            type="password" 
-                                            required
-                                            minLength="6"
-                                            placeholder="Şifre (En az 6 karakter)" 
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all"
-                                        />
+                                        <input type="password" required minLength="6" placeholder="Şifre" value={password} onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all" />
                                     </div>
                                 )}
                             </div>
 
                             {mode === 'login' && (
                                 <div className="text-right">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => { setMode('reset'); setAuthError(''); setSuccessMsg(''); }}
-                                        className="text-xs text-blue-300 hover:text-white transition-colors"
-                                    >
-                                        Şifremi Unuttum
-                                    </button>
+                                    <button type="button" onClick={() => { setMode('reset'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-300 hover:text-white transition-colors">Şifremi Unuttum</button>
                                 </div>
                             )}
 
-                            <button 
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-cyan-900/30 transition-all duration-300 active:scale-[0.98] disabled:opacity-70 mt-2"
-                            >
+                            <button type="submit" disabled={loading}
+                                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-cyan-900/30 transition-all duration-300 active:scale-[0.98] disabled:opacity-70 mt-2">
                                 {getButtonText()}
                             </button>
 
                             <div className="pt-2 flex flex-col gap-2">
                                 {mode === 'reset' ? (
-                                    <button 
-                                        type="button"
-                                        onClick={() => { setMode('login'); setAuthError(''); setSuccessMsg(''); }}
-                                        className="text-xs text-blue-200 hover:text-white transition-colors"
-                                    >
-                                        Giriş Ekranına Dön
-                                    </button>
+                                    <button type="button" onClick={() => { setMode('login'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-200 hover:text-white transition-colors">Giriş Ekranına Dön</button>
                                 ) : (
-                                    <button 
-                                        type="button"
-                                        onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setAuthError(''); setSuccessMsg(''); }}
-                                        className="text-xs text-blue-200 hover:text-white transition-colors underline decoration-blue-200/30 underline-offset-4"
-                                    >
+                                    <button type="button" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-200 hover:text-white transition-colors underline decoration-blue-200/30 underline-offset-4">
                                         {mode === 'login' ? 'Hesabın yok mu? Kayıt Ol' : 'Zaten hesabın var mı? Giriş Yap'}
                                     </button>
                                 )}
@@ -219,7 +190,6 @@
             const [successMsg, setSuccessMsg] = useState('');
             const [activeTab, setActiveTab] = useState('daily');
             
-            // Tarih ve Veriler
             const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
             const today = new Date().toISOString().split('T')[0];
             const isPast = selectedDate < today;
@@ -236,7 +206,6 @@
             const [auth, setAuth] = useState(null);
             const [appId, setAppId] = useState('ocean-planner-v1');
 
-            // --- Firebase Başlatma ---
             useEffect(() => {
                 const firebaseConfig = {
                     apiKey: "AIzaSyCpv-oGPpAISo4aZuUvE0HzMNEbm70lG0o", 
@@ -252,94 +221,51 @@
                     const app = initializeApp(firebaseConfig);
                     const authInstance = getAuth(app);
                     const dbInstance = getFirestore(app);
-                    
                     setAuth(authInstance);
                     setDb(dbInstance);
-
                     onAuthStateChanged(authInstance, (u) => {
                         setUser(u);
                         setAppLoading(false);
                     });
-
                 } catch (err) {
                     console.error("Firebase init hatası:", err);
                     setAppLoading(false);
                 }
             }, []);
 
-            // --- Giriş ---
             const handleLogin = async (email, password) => {
                 if (!auth) return;
-                setAuthLoading(true);
-                setAuthError('');
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    console.error("Giriş hatası:", error);
-                    let msg = "Giriş başarısız.";
-                    if (error.code === 'auth/invalid-credential') msg = "E-posta veya şifre yanlış.";
-                    else if (error.code === 'auth/user-not-found') msg = "Böyle bir kullanıcı bulunamadı.";
-                    else if (error.code === 'auth/wrong-password') msg = "Şifre hatalı.";
-                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
-                    setAuthError(msg);
-                } finally {
-                    setAuthLoading(false);
-                }
+                setAuthLoading(true); setAuthError('');
+                try { await signInWithEmailAndPassword(auth, email, password); } 
+                catch (error) { setAuthError("Giriş başarısız: " + error.code); } 
+                finally { setAuthLoading(false); }
             };
 
-            // --- Kayıt ---
             const handleSignup = async (email, password) => {
                 if (!auth) return;
-                setAuthLoading(true);
-                setAuthError('');
-                try {
-                    await createUserWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    console.error("Kayıt hatası:", error);
-                    let msg = "Kayıt başarısız.";
-                    if (error.code === 'auth/email-already-in-use') msg = "Bu e-posta zaten kullanımda.";
-                    else if (error.code === 'auth/weak-password') msg = "Şifre çok zayıf (en az 6 karakter).";
-                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
-                    setAuthError(msg);
-                } finally {
-                    setAuthLoading(false);
-                }
+                setAuthLoading(true); setAuthError('');
+                try { await createUserWithEmailAndPassword(auth, email, password); } 
+                catch (error) { setAuthError("Kayıt başarısız: " + error.code); } 
+                finally { setAuthLoading(false); }
             };
 
-            // --- Şifre Sıfırlama ---
             const handleResetPassword = async (email) => {
                 if (!auth) return;
-                setAuthLoading(true);
-                setAuthError('');
-                setSuccessMsg('');
-                try {
+                setAuthLoading(true); setAuthError(''); setSuccessMsg('');
+                try { 
                     await sendPasswordResetEmail(auth, email);
-                    setSuccessMsg('Sıfırlama linki e-postana gönderildi! Lütfen kutunu kontrol et.');
-                } catch (error) {
-                    console.error("Reset hatası:", error);
-                    let msg = "Sıfırlama maili gönderilemedi.";
-                    if (error.code === 'auth/user-not-found') msg = "Bu e-posta ile kayıtlı kullanıcı yok.";
-                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
-                    setAuthError(msg);
-                } finally {
-                    setAuthLoading(false);
-                }
+                    setSuccessMsg('Sıfırlama linki gönderildi!');
+                } catch (error) { setAuthError("Hata: " + error.code); } 
+                finally { setAuthLoading(false); }
             };
 
-            // --- Çıkış ---
             const handleLogout = async () => {
                 if (!auth) return;
-                try {
-                    await signOut(auth);
-                } catch (error) {
-                    console.error("Çıkış hatası:", error);
-                }
+                try { await signOut(auth); } catch (error) { console.error(error); }
             };
 
-            // --- Veri Çekme ---
             useEffect(() => {
                 if (!user || !db) return;
-
                 const dailyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDate);
                 const unsubscribeDaily = onSnapshot(dailyRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -347,24 +273,15 @@
                         setSchedule(data.schedule || {});
                         setReminders(data.reminders || []);
                         setWaterCount(data.waterCount || 0);
-                    } else {
-                        setSchedule({});
-                        setReminders([]);
-                        setWaterCount(0);
-                    }
+                    } else { setSchedule({}); setReminders([]); setWaterCount(0); }
                 });
-
                 const goalsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'goals');
                 const unsubscribeGoals = onSnapshot(goalsRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        setGoals(docSnap.data().goals || { 'Yakın Vade': {}, 'Orta Vade': {}, 'Uzun Vade': {} });
-                    }
+                    if (docSnap.exists()) setGoals(docSnap.data().goals || {});
                 });
-
                 return () => { unsubscribeDaily(); unsubscribeGoals(); };
             }, [user, db, selectedDate, appId]);
 
-            // --- Kaydetme ---
             const saveDailyData = async (newSchedule, newReminders, newWater) => {
                 if (!user || !db || isPast) return;
                 const dailyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDate);
@@ -382,35 +299,29 @@
                 await setDoc(goalsRef, { goals: updatedGoals }, { merge: true });
             };
 
-            // Handlers
             const handleScheduleChange = (time, value) => setSchedule(prev => ({ ...prev, [time]: value }));
             const handleScheduleBlur = () => !isPast && saveDailyData(schedule, undefined, undefined);
 
             const addReminder = () => {
                 if (newReminder.trim() && !isPast) {
                     const updated = [...reminders, { id: Date.now(), text: newReminder, completed: false }];
-                    setReminders(updated);
-                    setNewReminder('');
-                    saveDailyData(undefined, updated, undefined);
+                    setReminders(updated); setNewReminder(''); saveDailyData(undefined, updated, undefined);
                 }
             };
             const toggleReminder = (id) => {
                 if (isPast) return;
                 const updated = reminders.map(r => r.id === id ? { ...r, completed: !r.completed } : r);
-                setReminders(updated);
-                saveDailyData(undefined, updated, undefined);
+                setReminders(updated); saveDailyData(undefined, updated, undefined);
             };
             const deleteReminder = (id) => {
                 if (isPast) return;
                 const updated = reminders.filter(r => r.id !== id);
-                setReminders(updated);
-                saveDailyData(undefined, updated, undefined);
+                setReminders(updated); saveDailyData(undefined, updated, undefined);
             };
             const updateWater = (val) => {
                 if (isPast) return;
                 const newVal = Math.max(0, val);
-                setWaterCount(newVal);
-                saveDailyData(undefined, undefined, newVal);
+                setWaterCount(newVal); saveDailyData(undefined, undefined, newVal);
             };
 
             const addGoalItem = (term, catId) => {
@@ -419,25 +330,21 @@
                 const currentList = Array.isArray(goals[term]?.[catId]) ? goals[term][catId] : [];
                 const updatedList = [...currentList, { id: Date.now(), text, completed: false }];
                 const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
-                setGoals(newGoals);
-                setGoalInputs(prev => ({ ...prev, [catId]: '' }));
-                saveGoalsData(newGoals);
+                setGoals(newGoals); setGoalInputs(prev => ({ ...prev, [catId]: '' })); saveGoalsData(newGoals);
             };
             const toggleGoalItem = (term, catId, itemId) => {
                 const currentList = goals[term]?.[catId];
                 if (!Array.isArray(currentList)) return;
                 const updatedList = currentList.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
                 const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
-                setGoals(newGoals);
-                saveGoalsData(newGoals);
+                setGoals(newGoals); saveGoalsData(newGoals);
             };
             const deleteGoalItem = (term, catId, itemId) => {
                 const currentList = goals[term]?.[catId];
                 if (!Array.isArray(currentList)) return;
                 const updatedList = currentList.filter(i => i.id !== itemId);
                 const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
-                setGoals(newGoals);
-                saveGoalsData(newGoals);
+                setGoals(newGoals); saveGoalsData(newGoals);
             };
 
             if (appLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sky-600"><Icon name="loader-2" size={40} className="animate-spin" /></div>;
@@ -451,20 +358,30 @@
                         <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md shadow-sm border-b border-sky-100 rounded-2xl mb-6 px-4 py-3 md:px-8 md:py-4 transition-all">
                             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center justify-between w-full md:w-auto">
-                                    <div className="flex items-center gap-2 text-sky-800">
-                                        <Icon name="waves" size={28} />
+                                    <div className="flex items-center gap-3 text-sky-800">
+                                        {/* --- LOGO BÖLÜMÜ (HEADER) --- */}
+                                        <img 
+                                            src="logo.png" 
+                                            alt="Logo" 
+                                            className="w-10 h-10 object-contain"
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                e.target.nextSibling.style.display = 'block';
+                                            }}
+                                        />
+                                        <div style={{display:'none'}}>
+                                            <Icon name="waves" size={28} />
+                                        </div>
+                                        {/* --------------------------- */}
+                                        
                                         <h1 className="text-xl md:text-2xl font-bold tracking-tight">OceanPlanner</h1>
                                     </div>
-                                    <button onClick={handleLogout} className="md:hidden text-slate-400 hover:text-red-500 transition-colors p-2">
-                                        <Icon name="log-out" size={24} />
-                                    </button>
+                                    <button onClick={handleLogout} className="md:hidden text-slate-400 hover:text-red-500 transition-colors p-2"><Icon name="log-out" size={24} /></button>
                                 </div>
                                 
                                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                                     <div className={`w-full sm:w-auto flex items-center bg-white border ${isPast ? 'border-slate-300 bg-slate-50' : 'border-sky-200'} rounded-xl px-3 py-2 shadow-sm`}>
-                                        <div className={`mr-2 ${isPast ? 'text-slate-400' : 'text-sky-500'}`}>
-                                            <Icon name={isPast ? "lock" : "calendar"} size={18} />
-                                        </div>
+                                        <div className={`mr-2 ${isPast ? 'text-slate-400' : 'text-sky-500'}`}><Icon name={isPast ? "lock" : "calendar"} size={18} /></div>
                                         <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} 
                                             className="bg-transparent border-none text-sm text-slate-600 font-medium focus:ring-0 cursor-pointer outline-none w-full" />
                                     </div>
@@ -483,7 +400,6 @@
                             </div>
                         </nav>
 
-                        {/* Daily View */}
                         {activeTab === 'daily' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
                                 <div className="lg:col-span-2">
