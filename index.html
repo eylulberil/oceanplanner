@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ocean Planner</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(14, 165, 233, 0.3); border-radius: 20px; }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+        .glass-input { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: white; }
+        .glass-input::placeholder { color: rgba(255, 255, 255, 0.5); }
+        .glass-input:focus { background: rgba(255, 255, 255, 0.2); outline: none; border-color: rgba(255, 255, 255, 0.5); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-700 selection:bg-sky-200 overflow-x-hidden">
+
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // sendPasswordResetEmail eklendi
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const { useState, useEffect, useRef } = React;
+        
+        // --- İkon Bileşeni ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const ref = useRef(null);
+            useEffect(() => {
+                if (ref.current) {
+                    ref.current.innerHTML = '';
+                    const i = document.createElement('i');
+                    i.setAttribute('data-lucide', name);
+                    ref.current.appendChild(i);
+                    if (window.lucide) {
+                        window.lucide.createIcons({
+                            root: ref.current,
+                            icons: window.lucide.icons,
+                            attrs: { class: className, width: size, height: size }
+                        });
+                    }
+                }
+            }, [name, size, className]);
+            return <span ref={ref} style={{ display: 'inline-flex' }}></span>;
+        };
+
+        // --- Giriş / Kayıt / Şifre Sıfırlama Ekranı ---
+        const LoginScreen = ({ onLogin, onSignup, onResetPassword, loading, error, successMsg }) => {
+            const [mode, setMode] = useState('login'); // 'login', 'signup', 'reset'
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (mode === 'signup') {
+                    onSignup(email, password);
+                } else if (mode === 'login') {
+                    onLogin(email, password);
+                } else if (mode === 'reset') {
+                    onResetPassword(email);
+                }
+            };
+
+            const getTitle = () => {
+                if (mode === 'signup') return 'Yeni Hesap Oluştur';
+                if (mode === 'reset') return 'Şifremi Unuttum';
+                return 'Giriş Yap';
+            };
+
+            const getButtonText = () => {
+                if (loading) return <Icon name="loader-2" className="animate-spin mx-auto" />;
+                if (mode === 'signup') return 'Kayıt Ol';
+                if (mode === 'reset') return 'Sıfırlama Linki Gönder';
+                return 'Giriş Yap';
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-sky-900 via-blue-800 to-indigo-900 text-white p-6 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                        <div className="absolute top-10 left-10 w-64 h-64 bg-cyan-400 rounded-full blur-3xl"></div>
+                        <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <div className="z-10 flex flex-col items-center text-center max-w-sm w-full animate-fadeIn">
+                        <div className="bg-white/10 backdrop-blur-lg p-4 rounded-3xl mb-6 animate-float shadow-2xl border border-white/10">
+                            <Icon name="waves" size={48} className="text-cyan-300" />
+                        </div>
+                        
+                        <h1 className="text-3xl font-bold mb-2 tracking-tight">OceanPlanner</h1>
+                        <p className="text-blue-200 mb-8 text-sm">Hayatını planla, akışına bırak.</p>
+                        
+                        <form onSubmit={handleSubmit} className="w-full space-y-4 bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
+                            <h2 className="text-lg font-semibold mb-2">{getTitle()}</h2>
+                            
+                            {error && (
+                                <div className="bg-red-500/20 border border-red-500/50 text-red-100 text-xs p-3 rounded-lg text-left">
+                                    {error}
+                                </div>
+                            )}
+
+                            {successMsg && (
+                                <div className="bg-green-500/20 border border-green-500/50 text-green-100 text-xs p-3 rounded-lg text-left">
+                                    {successMsg}
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-blue-200/50"><Icon name="mail" size={18} /></div>
+                                    <input 
+                                        type="email" 
+                                        required
+                                        placeholder="E-posta" 
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all"
+                                    />
+                                </div>
+                                
+                                {mode !== 'reset' && (
+                                    <div className="relative">
+                                        <div className="absolute left-3 top-3 text-blue-200/50"><Icon name="lock" size={18} /></div>
+                                        <input 
+                                            type="password" 
+                                            required
+                                            minLength="6"
+                                            placeholder="Şifre (En az 6 karakter)" 
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-3 rounded-xl glass-input text-sm transition-all"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {mode === 'login' && (
+                                <div className="text-right">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setMode('reset'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-300 hover:text-white transition-colors"
+                                    >
+                                        Şifremi Unuttum
+                                    </button>
+                                </div>
+                            )}
+
+                            <button 
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-cyan-900/30 transition-all duration-300 active:scale-[0.98] disabled:opacity-70 mt-2"
+                            >
+                                {getButtonText()}
+                            </button>
+
+                            <div className="pt-2 flex flex-col gap-2">
+                                {mode === 'reset' ? (
+                                    <button 
+                                        type="button"
+                                        onClick={() => { setMode('login'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-200 hover:text-white transition-colors"
+                                    >
+                                        Giriş Ekranına Dön
+                                    </button>
+                                ) : (
+                                    <button 
+                                        type="button"
+                                        onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setAuthError(''); setSuccessMsg(''); }}
+                                        className="text-xs text-blue-200 hover:text-white transition-colors underline decoration-blue-200/30 underline-offset-4"
+                                    >
+                                        {mode === 'login' ? 'Hesabın yok mu? Kayıt Ol' : 'Zaten hesabın var mı? Giriş Yap'}
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Sabitler ---
+        const categories = [
+            { id: 'spor', name: 'Spor', icon: 'dumbbell', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+            { id: 'beslenme', name: 'Beslenme', icon: 'utensils', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+            { id: 'bakim', name: 'Bakım', icon: 'sparkles', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+            { id: 'akademi', name: 'Akademi', icon: 'book-open', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+            { id: 'proje', name: 'Proje', icon: 'briefcase', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
+            { id: 'finans', name: 'Finans', icon: 'wallet', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' }
+        ];
+
+        const timeSlots = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"];
+        const terms = ['Yakın Vade', 'Orta Vade', 'Uzun Vade'];
+
+        // --- Ana Uygulama ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [appLoading, setAppLoading] = useState(true);
+            const [authLoading, setAuthLoading] = useState(false);
+            const [authError, setAuthError] = useState('');
+            const [successMsg, setSuccessMsg] = useState('');
+            const [activeTab, setActiveTab] = useState('daily');
+            
+            // Tarih ve Veriler
+            const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+            const today = new Date().toISOString().split('T')[0];
+            const isPast = selectedDate < today;
+
+            const [schedule, setSchedule] = useState({});
+            const [reminders, setReminders] = useState([]);
+            const [newReminder, setNewReminder] = useState('');
+            const [waterCount, setWaterCount] = useState(0);
+            const [activeTerm, setActiveTerm] = useState('Yakın Vade');
+            const [goals, setGoals] = useState({ 'Yakın Vade': {}, 'Orta Vade': {}, 'Uzun Vade': {} });
+            const [goalInputs, setGoalInputs] = useState({});
+
+            const [db, setDb] = useState(null);
+            const [auth, setAuth] = useState(null);
+            const [appId, setAppId] = useState('ocean-planner-v1');
+
+            // --- Firebase Başlatma ---
+            useEffect(() => {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCpv-oGPpAISo4aZuUvE0HzMNEbm70lG0o", 
+                    authDomain: "ocean-planner-d2702.firebaseapp.com",
+                    projectId: "ocean-planner-d2702",
+                    storageBucket: "ocean-planner-d2702.firebasestorage.app",
+                    messagingSenderId: "862092781552",
+                    appId: "1:862092781552:web:d4adc019d984b55c825f35",
+                    measurementId: "G-1DCMPB609K"
+                };
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    const authInstance = getAuth(app);
+                    const dbInstance = getFirestore(app);
+                    
+                    setAuth(authInstance);
+                    setDb(dbInstance);
+
+                    onAuthStateChanged(authInstance, (u) => {
+                        setUser(u);
+                        setAppLoading(false);
+                    });
+
+                } catch (err) {
+                    console.error("Firebase init hatası:", err);
+                    setAppLoading(false);
+                }
+            }, []);
+
+            // --- Giriş ---
+            const handleLogin = async (email, password) => {
+                if (!auth) return;
+                setAuthLoading(true);
+                setAuthError('');
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    console.error("Giriş hatası:", error);
+                    let msg = "Giriş başarısız.";
+                    if (error.code === 'auth/invalid-credential') msg = "E-posta veya şifre yanlış.";
+                    else if (error.code === 'auth/user-not-found') msg = "Böyle bir kullanıcı bulunamadı.";
+                    else if (error.code === 'auth/wrong-password') msg = "Şifre hatalı.";
+                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
+                    setAuthError(msg);
+                } finally {
+                    setAuthLoading(false);
+                }
+            };
+
+            // --- Kayıt ---
+            const handleSignup = async (email, password) => {
+                if (!auth) return;
+                setAuthLoading(true);
+                setAuthError('');
+                try {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    console.error("Kayıt hatası:", error);
+                    let msg = "Kayıt başarısız.";
+                    if (error.code === 'auth/email-already-in-use') msg = "Bu e-posta zaten kullanımda.";
+                    else if (error.code === 'auth/weak-password') msg = "Şifre çok zayıf (en az 6 karakter).";
+                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
+                    setAuthError(msg);
+                } finally {
+                    setAuthLoading(false);
+                }
+            };
+
+            // --- Şifre Sıfırlama ---
+            const handleResetPassword = async (email) => {
+                if (!auth) return;
+                setAuthLoading(true);
+                setAuthError('');
+                setSuccessMsg('');
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                    setSuccessMsg('Sıfırlama linki e-postana gönderildi! Lütfen kutunu kontrol et.');
+                } catch (error) {
+                    console.error("Reset hatası:", error);
+                    let msg = "Sıfırlama maili gönderilemedi.";
+                    if (error.code === 'auth/user-not-found') msg = "Bu e-posta ile kayıtlı kullanıcı yok.";
+                    else if (error.code === 'auth/invalid-email') msg = "Geçersiz e-posta formatı.";
+                    setAuthError(msg);
+                } finally {
+                    setAuthLoading(false);
+                }
+            };
+
+            // --- Çıkış ---
+            const handleLogout = async () => {
+                if (!auth) return;
+                try {
+                    await signOut(auth);
+                } catch (error) {
+                    console.error("Çıkış hatası:", error);
+                }
+            };
+
+            // --- Veri Çekme ---
+            useEffect(() => {
+                if (!user || !db) return;
+
+                const dailyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDate);
+                const unsubscribeDaily = onSnapshot(dailyRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setSchedule(data.schedule || {});
+                        setReminders(data.reminders || []);
+                        setWaterCount(data.waterCount || 0);
+                    } else {
+                        setSchedule({});
+                        setReminders([]);
+                        setWaterCount(0);
+                    }
+                });
+
+                const goalsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'goals');
+                const unsubscribeGoals = onSnapshot(goalsRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setGoals(docSnap.data().goals || { 'Yakın Vade': {}, 'Orta Vade': {}, 'Uzun Vade': {} });
+                    }
+                });
+
+                return () => { unsubscribeDaily(); unsubscribeGoals(); };
+            }, [user, db, selectedDate, appId]);
+
+            // --- Kaydetme ---
+            const saveDailyData = async (newSchedule, newReminders, newWater) => {
+                if (!user || !db || isPast) return;
+                const dailyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDate);
+                await setDoc(dailyRef, {
+                    schedule: newSchedule !== undefined ? newSchedule : schedule,
+                    reminders: newReminders !== undefined ? newReminders : reminders,
+                    waterCount: newWater !== undefined ? newWater : waterCount,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            };
+
+            const saveGoalsData = async (updatedGoals) => {
+                if (!user || !db) return;
+                const goalsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'goals');
+                await setDoc(goalsRef, { goals: updatedGoals }, { merge: true });
+            };
+
+            // Handlers
+            const handleScheduleChange = (time, value) => setSchedule(prev => ({ ...prev, [time]: value }));
+            const handleScheduleBlur = () => !isPast && saveDailyData(schedule, undefined, undefined);
+
+            const addReminder = () => {
+                if (newReminder.trim() && !isPast) {
+                    const updated = [...reminders, { id: Date.now(), text: newReminder, completed: false }];
+                    setReminders(updated);
+                    setNewReminder('');
+                    saveDailyData(undefined, updated, undefined);
+                }
+            };
+            const toggleReminder = (id) => {
+                if (isPast) return;
+                const updated = reminders.map(r => r.id === id ? { ...r, completed: !r.completed } : r);
+                setReminders(updated);
+                saveDailyData(undefined, updated, undefined);
+            };
+            const deleteReminder = (id) => {
+                if (isPast) return;
+                const updated = reminders.filter(r => r.id !== id);
+                setReminders(updated);
+                saveDailyData(undefined, updated, undefined);
+            };
+            const updateWater = (val) => {
+                if (isPast) return;
+                const newVal = Math.max(0, val);
+                setWaterCount(newVal);
+                saveDailyData(undefined, undefined, newVal);
+            };
+
+            const addGoalItem = (term, catId) => {
+                const text = goalInputs[catId];
+                if (!text?.trim()) return;
+                const currentList = Array.isArray(goals[term]?.[catId]) ? goals[term][catId] : [];
+                const updatedList = [...currentList, { id: Date.now(), text, completed: false }];
+                const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
+                setGoals(newGoals);
+                setGoalInputs(prev => ({ ...prev, [catId]: '' }));
+                saveGoalsData(newGoals);
+            };
+            const toggleGoalItem = (term, catId, itemId) => {
+                const currentList = goals[term]?.[catId];
+                if (!Array.isArray(currentList)) return;
+                const updatedList = currentList.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+                const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
+                setGoals(newGoals);
+                saveGoalsData(newGoals);
+            };
+            const deleteGoalItem = (term, catId, itemId) => {
+                const currentList = goals[term]?.[catId];
+                if (!Array.isArray(currentList)) return;
+                const updatedList = currentList.filter(i => i.id !== itemId);
+                const newGoals = { ...goals, [term]: { ...goals[term], [catId]: updatedList } };
+                setGoals(newGoals);
+                saveGoalsData(newGoals);
+            };
+
+            if (appLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sky-600"><Icon name="loader-2" size={40} className="animate-spin" /></div>;
+
+            if (!user) return <LoginScreen onLogin={handleLogin} onSignup={handleSignup} onResetPassword={handleResetPassword} loading={authLoading} error={authError} successMsg={successMsg} />;
+
+            return (
+                <div className="bg-gradient-to-br from-cyan-50 via-blue-50 to-sky-100 min-h-screen pb-10">
+                    <div className="max-w-6xl mx-auto px-4 py-4 md:py-8">
+                        {/* Header */}
+                        <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md shadow-sm border-b border-sky-100 rounded-2xl mb-6 px-4 py-3 md:px-8 md:py-4 transition-all">
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="flex items-center justify-between w-full md:w-auto">
+                                    <div className="flex items-center gap-2 text-sky-800">
+                                        <Icon name="waves" size={28} />
+                                        <h1 className="text-xl md:text-2xl font-bold tracking-tight">OceanPlanner</h1>
+                                    </div>
+                                    <button onClick={handleLogout} className="md:hidden text-slate-400 hover:text-red-500 transition-colors p-2">
+                                        <Icon name="log-out" size={24} />
+                                    </button>
+                                </div>
+                                
+                                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                                    <div className={`w-full sm:w-auto flex items-center bg-white border ${isPast ? 'border-slate-300 bg-slate-50' : 'border-sky-200'} rounded-xl px-3 py-2 shadow-sm`}>
+                                        <div className={`mr-2 ${isPast ? 'text-slate-400' : 'text-sky-500'}`}>
+                                            <Icon name={isPast ? "lock" : "calendar"} size={18} />
+                                        </div>
+                                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} 
+                                            className="bg-transparent border-none text-sm text-slate-600 font-medium focus:ring-0 cursor-pointer outline-none w-full" />
+                                    </div>
+                                    <div className="flex w-full sm:w-auto bg-slate-100/80 p-1 rounded-xl">
+                                        <button onClick={() => setActiveTab('daily')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'daily' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-sky-600'}`}>
+                                            <Icon name="sun" size={16} /> Günlük
+                                        </button>
+                                        <button onClick={() => setActiveTab('future')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'future' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-sky-600'}`}>
+                                            <Icon name="target" size={16} /> Hedefler
+                                        </button>
+                                    </div>
+                                    <button onClick={handleLogout} title="Çıkış Yap" className="hidden md:flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all shadow-sm">
+                                        <Icon name="log-out" size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        </nav>
+
+                        {/* Daily View */}
+                        {activeTab === 'daily' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+                                <div className="lg:col-span-2">
+                                    <div className={`backdrop-blur-sm rounded-3xl p-5 md:p-6 shadow-xl border transition-colors ${isPast ? 'bg-slate-50/80 shadow-slate-200 border-slate-100' : 'bg-white/70 shadow-sky-900/5 border-white'}`}>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h2 className={`text-lg md:text-xl font-bold flex items-center gap-2 ${isPast ? 'text-slate-600' : 'text-sky-900'}`}>
+                                                <Icon name="clock" size={20} className={`${isPast ? 'text-slate-400' : 'text-sky-500'}`} />
+                                                Zaman Çizelgesi
+                                            </h2>
+                                            <span className={`text-xs font-mono px-2 py-1 rounded-md ${isPast ? 'bg-slate-200 text-slate-500' : 'text-sky-600 bg-sky-50'}`}>{selectedDate}</span>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {timeSlots.map((time) => (
+                                                <div key={time} className="flex items-center gap-3">
+                                                    <span className={`w-12 text-xs md:text-sm font-semibold font-mono ${isPast ? 'text-slate-400' : 'text-sky-900/60'}`}>{time}</span>
+                                                    <div className="flex-1">
+                                                        <input type="text" readOnly={isPast} placeholder={isPast ? "-" : "Plan..."}
+                                                            value={schedule[time] || ''} onChange={(e) => handleScheduleChange(time, e.target.value)} onBlur={handleScheduleBlur}
+                                                            className={`w-full border rounded-xl px-3 py-2.5 md:py-3 text-sm md:text-base text-slate-700 transition-all shadow-sm ${isPast ? 'bg-slate-100 border-transparent text-slate-500 cursor-not-allowed' : 'bg-white/50 border-sky-100 focus:ring-2 focus:ring-sky-400 focus:bg-white'}`}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className={`backdrop-blur-sm rounded-3xl p-5 md:p-6 shadow-xl border transition-colors ${isPast ? 'bg-slate-50/80 shadow-slate-200 border-slate-100' : 'bg-white/70 shadow-sky-900/5 border-white'}`}>
+                                        <h2 className={`text-lg md:text-xl font-bold mb-4 flex items-center gap-2 ${isPast ? 'text-slate-600' : 'text-sky-900'}`}>
+                                            <Icon name="anchor" size={20} className={`${isPast ? 'text-slate-400' : 'text-sky-500'}`} />
+                                            Görevler
+                                        </h2>
+                                        <div className="flex gap-2 mb-4">
+                                            <input type="text" disabled={isPast} value={newReminder} onChange={(e) => setNewReminder(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addReminder()}
+                                                placeholder={isPast ? "Kilitli" : "Ekle..."}
+                                                className={`flex-1 border-none rounded-xl px-4 py-2 text-sm outline-none ${isPast ? 'bg-slate-100 text-slate-400' : 'bg-sky-50/50 focus:ring-2 focus:ring-sky-400'}`} />
+                                            {!isPast && <button onClick={addReminder} className="bg-sky-500 hover:bg-sky-600 text-white p-2 rounded-xl"><Icon name="plus" size={20} /></button>}
+                                        </div>
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                            {reminders.length === 0 && <div className="text-center text-slate-400 py-4 text-xs italic">Görev yok</div>}
+                                            {reminders.map((r) => (
+                                                <div key={r.id} className={`flex items-start gap-2 p-3 rounded-xl transition-all ${r.completed ? 'bg-sky-50 opacity-60' : 'bg-white shadow-sm'} ${isPast ? 'opacity-80' : ''}`}>
+                                                    <button onClick={() => toggleReminder(r.id)} disabled={isPast} className={`mt-0.5 ${r.completed ? 'text-sky-500' : 'text-slate-300'}`}><Icon name="check-circle-2" size={18} /></button>
+                                                    <span className={`flex-1 text-sm ${r.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{r.text}</span>
+                                                    {!isPast && <button onClick={() => deleteReminder(r.id)} className="text-slate-300 hover:text-red-400"><Icon name="trash-2" size={16} /></button>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className={`rounded-3xl p-6 shadow-lg text-white relative overflow-hidden ${isPast ? 'bg-slate-400' : 'bg-gradient-to-br from-blue-500 to-cyan-400'}`}>
+                                        <Icon name="droplets" size={80} className="absolute -right-4 -bottom-4 opacity-20" />
+                                        <div className="relative z-10">
+                                            <h3 className="font-bold text-lg mb-1">Su Takibi</h3>
+                                            <div className="flex items-end gap-2 mb-4">
+                                                <span className="text-5xl font-bold">{waterCount}</span>
+                                                <span className="text-lg mb-2 opacity-80">bardak</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button disabled={isPast} onClick={() => updateWater(waterCount - 1)} className="px-4 py-2 bg-white/20 rounded-xl hover:bg-white/30 transition-colors">-</button>
+                                                <button disabled={isPast} onClick={() => updateWater(waterCount + 1)} className="flex-1 py-2 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-sm">+ İçtim</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'future' && (
+                            <div className="animate-fadeIn">
+                                <div className="flex justify-center mb-6 md:mb-8 overflow-x-auto pb-2 md:pb-0">
+                                    <div className="bg-white/60 p-1.5 rounded-xl shadow-sm inline-flex whitespace-nowrap">
+                                        {terms.map((term) => (
+                                            <button key={term} onClick={() => setActiveTerm(term)} className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all ${activeTerm === term ? 'bg-white text-sky-600 shadow-md ring-1 ring-sky-100' : 'text-slate-500 hover:text-sky-600'}`}>{term}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {categories.map((cat) => {
+                                        const items = Array.isArray(goals[activeTerm]?.[cat.id]) ? goals[activeTerm][cat.id] : [];
+                                        return (
+                                            <div key={cat.id} className={`bg-white/80 backdrop-blur-md rounded-3xl p-1 shadow-lg border border-white flex flex-col h-auto min-h-[350px] lg:h-[400px]`}>
+                                                <div className="flex flex-col h-full p-5">
+                                                    <div className="flex items-center gap-3 mb-4">
+                                                        <div className={`p-3 rounded-2xl ${cat.bg} ${cat.color} border ${cat.border}`}>
+                                                            <Icon name={cat.icon} size={24} />
+                                                        </div>
+                                                        <h3 className="text-lg font-bold text-slate-700">{cat.name}</h3>
+                                                    </div>
+                                                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-4 min-h-[100px]">
+                                                        {items.length === 0 && <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs italic opacity-70">Henüz hedef yok</div>}
+                                                        {items.map((item) => (
+                                                            <div key={item.id} className={`flex items-start gap-2 p-2.5 rounded-xl text-sm transition-all group ${item.completed ? 'bg-slate-50 opacity-60' : 'bg-white/60 shadow-sm border border-slate-100'}`}>
+                                                                <button onClick={() => toggleGoalItem(activeTerm, cat.id, item.id)} className={`mt-0.5 ${item.completed ? 'text-sky-500' : 'text-slate-300'}`}><Icon name="check-circle-2" size={16} /></button>
+                                                                <span className={`flex-1 break-words ${item.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{item.text}</span>
+                                                                <button onClick={() => deleteGoalItem(activeTerm, cat.id, item.id)} className="text-slate-300 hover:text-red-400 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"><Icon name="x" size={16} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="relative mt-auto">
+                                                        <input type="text" placeholder="Hedef..." value={goalInputs[cat.id] || ''} onChange={(e) => setGoalInputs(prev => ({ ...prev, [cat.id]: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && addGoalItem(activeTerm, cat.id)}
+                                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-10 py-3 text-sm focus:ring-2 focus:ring-sky-200 focus:bg-white transition-all" />
+                                                        <button onClick={() => addGoalItem(activeTerm, cat.id)} disabled={!goalInputs[cat.id]?.trim()} className="absolute right-2 top-2 p-1.5 bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-500 hover:text-white transition-all disabled:opacity-30"><Icon name="plus" size={16} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
